@@ -98,5 +98,80 @@ CREATE TABLE IF NOT EXISTS public.users
     CONSTRAINT users_username_key UNIQUE (username)
 )
 
+trigger:
+CREATE OR REPLACE FUNCTION public.calculate_marks()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
+DECLARE
+  correct_answer_var TEXT;
+  marks_var INT;
+BEGIN
+  SELECT correct_answer, marks
+  INTO correct_answer_var, marks_var
+  FROM question
+  WHERE id = NEW.question_id;
+
+  IF NEW.selected_option = correct_answer_var THEN
+    NEW.is_correct := TRUE;
+    NEW.marks_obtained := marks_var;
+  ELSE
+    NEW.is_correct := FALSE;
+    NEW.marks_obtained := 0;
+  END IF;
+
+  RETURN NEW;
+END;
+$BODY$;
+
+ALTER FUNCTION public.calculate_marks()
+    OWNER TO postgres;
+
+--------------------------------------------------------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION public.update_total_score()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
+BEGIN
+    -- Check if a row for this user & quiz already exists in result
+    IF EXISTS (
+        SELECT 1 FROM result
+        WHERE user_id = NEW.user_id AND quiz_id = NEW.quiz_id
+    ) THEN
+        -- Update total_score by summing marks from user_answer
+        UPDATE result
+        SET total_score = (
+            SELECT SUM(marks_obtained)
+            FROM user_answer
+            WHERE user_id = NEW.user_id AND quiz_id = NEW.quiz_id
+        ),
+        submitted_at = NOW()
+        WHERE user_id = NEW.user_id AND quiz_id = NEW.quiz_id;
+    ELSE
+        -- Insert a new row in result
+        INSERT INTO result (user_id, quiz_id, total_score, submitted_at)
+        VALUES (
+            NEW.user_id,
+            NEW.quiz_id,
+            (SELECT SUM(marks_obtained)
+             FROM user_answer
+             WHERE user_id = NEW.user_id AND quiz_id = NEW.quiz_id),
+            NOW()
+        );
+    END IF;
+
+    RETURN NEW;
+END;
+$BODY$;
+
+ALTER FUNCTION public.update_total_score()
+    OWNER TO postgres;
+
+
 
 

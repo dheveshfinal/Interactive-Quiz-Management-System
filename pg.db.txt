@@ -1,0 +1,102 @@
+option:
+
+CREATE TABLE IF NOT EXISTS public.option
+(
+    id integer NOT NULL DEFAULT nextval('option_id_seq'::regclass),
+    question_id integer,
+    option_text text COLLATE pg_catalog."default" NOT NULL,
+    CONSTRAINT option_pkey PRIMARY KEY (id),
+    CONSTRAINT option_question_id_fkey FOREIGN KEY (question_id)
+        REFERENCES public.question (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+question:
+CREATE TABLE IF NOT EXISTS public.question
+(
+    id integer NOT NULL DEFAULT nextval('question_id_seq'::regclass),
+    quiz_id integer NOT NULL,
+    question_text text COLLATE pg_catalog."default" NOT NULL,
+    question_type character varying(50) COLLATE pg_catalog."default",
+    marks integer,
+    correct_answer text COLLATE pg_catalog."default",
+    CONSTRAINT question_pkey PRIMARY KEY (id),
+    CONSTRAINT question_quiz_id_fkey FOREIGN KEY (quiz_id)
+        REFERENCES public.quiz (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+quiz:
+CREATE TABLE IF NOT EXISTS public.quiz
+(
+    id integer NOT NULL DEFAULT nextval('quiz_id_seq'::regclass),
+    title character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    description text COLLATE pg_catalog."default",
+    "Status" character varying(50) COLLATE pg_catalog."default",
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT quiz_pkey PRIMARY KEY (id)
+)
+
+result:
+CREATE TABLE IF NOT EXISTS public.result
+(
+    id integer NOT NULL DEFAULT nextval('result_id_seq'::regclass),
+    user_id integer NOT NULL,
+    quiz_id integer NOT NULL,
+    total_score integer NOT NULL DEFAULT 0,
+    submitted_at timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT result_pkey PRIMARY KEY (id),
+    CONSTRAINT result_user_id_quiz_id_key UNIQUE (user_id, quiz_id),
+    CONSTRAINT result_quiz_id_fkey FOREIGN KEY (quiz_id)
+        REFERENCES public.quiz (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE,
+    CONSTRAINT result_user_id_fkey FOREIGN KEY (user_id)
+        REFERENCES public.users (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+user_answer:
+CREATE TABLE IF NOT EXISTS public.user_answer
+(
+    id integer NOT NULL DEFAULT nextval('user_answer_id_seq'::regclass),
+    user_id integer NOT NULL,
+    quiz_id integer NOT NULL,
+    question_id integer NOT NULL,
+    selected_option text COLLATE pg_catalog."default",
+    is_correct boolean NOT NULL,
+    marks_obtained integer DEFAULT 0,
+    CONSTRAINT user_answer_pkey PRIMARY KEY (id),
+    CONSTRAINT user_answer_user_id_quiz_id_question_id_key UNIQUE (user_id, quiz_id, question_id),
+    CONSTRAINT user_answer_question_id_fkey FOREIGN KEY (question_id)
+        REFERENCES public.question (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE,
+    CONSTRAINT user_answer_quiz_id_fkey FOREIGN KEY (quiz_id)
+        REFERENCES public.quiz (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE,
+    CONSTRAINT user_answer_user_id_fkey FOREIGN KEY (user_id)
+        REFERENCES public.users (id) MATCH SIMPLE
+        ON UPDATE NO ACTION
+        ON DELETE CASCADE
+)
+
+users:
+CREATE TABLE IF NOT EXISTS public.users
+(
+    id integer NOT NULL DEFAULT nextval('users_id_seq'::regclass),
+    username character varying(100) COLLATE pg_catalog."default" NOT NULL,
+    password character varying(255) COLLATE pg_catalog."default" NOT NULL,
+    email character varying(255) COLLATE pg_catalog."default",
+    role character varying(50) COLLATE pg_catalog."default" DEFAULT 'user'::character varying,
+    CONSTRAINT users_pkey PRIMARY KEY (id),
+    CONSTRAINT users_email_key UNIQUE (email),
+    CONSTRAINT users_username_key UNIQUE (username)
+)
+
+
+

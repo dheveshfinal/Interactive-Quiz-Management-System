@@ -63,3 +63,5 @@ DB_USER=your_username
 DB_PASSWORD=your_password
 DB_NAME=quiz_system
 DB_PORT=5432
+
+use pg.db.text which contain the query for table and trigger

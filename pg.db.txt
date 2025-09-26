@@ -1,109 +1,84 @@
-option:
-
-CREATE TABLE IF NOT EXISTS public.option
-(
-    id integer NOT NULL DEFAULT nextval('option_id_seq'::regclass),
-    question_id integer,
-    option_text text COLLATE pg_catalog."default" NOT NULL,
-    CONSTRAINT option_pkey PRIMARY KEY (id),
-    CONSTRAINT option_question_id_fkey FOREIGN KEY (question_id)
-        REFERENCES public.question (id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE CASCADE
-)
-
-question:
-CREATE TABLE IF NOT EXISTS public.question
-(
-    id integer NOT NULL DEFAULT nextval('question_id_seq'::regclass),
-    quiz_id integer NOT NULL,
-    question_text text COLLATE pg_catalog."default" NOT NULL,
-    question_type character varying(50) COLLATE pg_catalog."default",
-    marks integer,
-    correct_answer text COLLATE pg_catalog."default",
-    CONSTRAINT question_pkey PRIMARY KEY (id),
-    CONSTRAINT question_quiz_id_fkey FOREIGN KEY (quiz_id)
-        REFERENCES public.quiz (id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE CASCADE
-)
-
-quiz:
-CREATE TABLE IF NOT EXISTS public.quiz
-(
-    id integer NOT NULL DEFAULT nextval('quiz_id_seq'::regclass),
-    title character varying(255) COLLATE pg_catalog."default" NOT NULL,
-    description text COLLATE pg_catalog."default",
-    "Status" character varying(50) COLLATE pg_catalog."default",
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT quiz_pkey PRIMARY KEY (id)
-)
-
-result:
-CREATE TABLE IF NOT EXISTS public.result
-(
-    id integer NOT NULL DEFAULT nextval('result_id_seq'::regclass),
-    user_id integer NOT NULL,
-    quiz_id integer NOT NULL,
-    total_score integer NOT NULL DEFAULT 0,
-    submitted_at timestamp without time zone NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT result_pkey PRIMARY KEY (id),
-    CONSTRAINT result_user_id_quiz_id_key UNIQUE (user_id, quiz_id),
-    CONSTRAINT result_quiz_id_fkey FOREIGN KEY (quiz_id)
-        REFERENCES public.quiz (id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE CASCADE,
-    CONSTRAINT result_user_id_fkey FOREIGN KEY (user_id)
-        REFERENCES public.users (id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE CASCADE
-)
-
-user_answer:
-CREATE TABLE IF NOT EXISTS public.user_answer
-(
-    id integer NOT NULL DEFAULT nextval('user_answer_id_seq'::regclass),
-    user_id integer NOT NULL,
-    quiz_id integer NOT NULL,
-    question_id integer NOT NULL,
-    selected_option text COLLATE pg_catalog."default",
-    is_correct boolean NOT NULL,
-    marks_obtained integer DEFAULT 0,
-    CONSTRAINT user_answer_pkey PRIMARY KEY (id),
-    CONSTRAINT user_answer_user_id_quiz_id_question_id_key UNIQUE (user_id, quiz_id, question_id),
-    CONSTRAINT user_answer_question_id_fkey FOREIGN KEY (question_id)
-        REFERENCES public.question (id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE CASCADE,
-    CONSTRAINT user_answer_quiz_id_fkey FOREIGN KEY (quiz_id)
-        REFERENCES public.quiz (id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE CASCADE,
-    CONSTRAINT user_answer_user_id_fkey FOREIGN KEY (user_id)
-        REFERENCES public.users (id) MATCH SIMPLE
-        ON UPDATE NO ACTION
-        ON DELETE CASCADE
-)
-
-users:
+-- =========================================
+-- 1. USERS TABLE
+-- =========================================
 CREATE TABLE IF NOT EXISTS public.users
 (
-    id integer NOT NULL DEFAULT nextval('users_id_seq'::regclass),
-    username character varying(100) COLLATE pg_catalog."default" NOT NULL,
-    password character varying(255) COLLATE pg_catalog."default" NOT NULL,
-    email character varying(255) COLLATE pg_catalog."default",
-    role character varying(50) COLLATE pg_catalog."default" DEFAULT 'user'::character varying,
-    CONSTRAINT users_pkey PRIMARY KEY (id),
-    CONSTRAINT users_email_key UNIQUE (email),
-    CONSTRAINT users_username_key UNIQUE (username)
-)
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(100) NOT NULL UNIQUE,
+    password VARCHAR(255) NOT NULL,
+    email VARCHAR(255) UNIQUE,
+    role VARCHAR(50) DEFAULT 'user'
+);
 
-trigger:
+-- =========================================
+-- 2. QUIZ TABLE
+-- =========================================
+CREATE TABLE IF NOT EXISTS public.quiz
+(
+    id SERIAL PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    "Status" VARCHAR(50),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- =========================================
+-- 3. QUESTION TABLE
+-- =========================================
+CREATE TABLE IF NOT EXISTS public.question
+(
+    id SERIAL PRIMARY KEY,
+    quiz_id INT NOT NULL REFERENCES public.quiz(id) ON DELETE CASCADE,
+    question_text TEXT NOT NULL,
+    question_type VARCHAR(50),
+    marks INT,
+    correct_answer TEXT
+);
+
+-- =========================================
+-- 4. QUIZ_OPTION TABLE
+-- =========================================
+CREATE TABLE IF NOT EXISTS public.quiz_option
+(
+    id SERIAL PRIMARY KEY,
+    question_id INT REFERENCES public.question(id) ON DELETE CASCADE,
+    option_text TEXT NOT NULL
+);
+
+-- =========================================
+-- 5. RESULT TABLE
+-- =========================================
+CREATE TABLE IF NOT EXISTS public.result
+(
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    quiz_id INT NOT NULL REFERENCES public.quiz(id) ON DELETE CASCADE,
+    total_score INT DEFAULT 0,
+    submitted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, quiz_id)
+);
+
+-- =========================================
+-- 6. USER_ANSWER TABLE
+-- =========================================
+CREATE TABLE IF NOT EXISTS public.user_answer
+(
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    quiz_id INT NOT NULL REFERENCES public.quiz(id) ON DELETE CASCADE,
+    question_id INT NOT NULL REFERENCES public.question(id) ON DELETE CASCADE,
+    selected_option TEXT,
+    is_correct BOOLEAN NOT NULL,
+    marks_obtained INT DEFAULT 0,
+    UNIQUE(user_id, quiz_id, question_id)
+);
+
+-- =========================================
+-- 7. FUNCTION: CALCULATE MARKS
+-- =========================================
 CREATE OR REPLACE FUNCTION public.calculate_marks()
-    RETURNS trigger
-    LANGUAGE 'plpgsql'
-    COST 100
-    VOLATILE NOT LEAKPROOF
+RETURNS trigger
+LANGUAGE 'plpgsql'
 AS $BODY$
 DECLARE
   correct_answer_var TEXT;
@@ -127,23 +102,26 @@ END;
 $BODY$;
 
 ALTER FUNCTION public.calculate_marks()
-    OWNER TO postgres;
+OWNER TO quize_0zik_user;
 
---------------------------------------------------------------------------------------------------------------------
+-- Trigger for calculate_marks
+CREATE TRIGGER trg_calculate_marks
+BEFORE INSERT ON user_answer
+FOR EACH ROW
+EXECUTE FUNCTION public.calculate_marks();
 
+-- =========================================
+-- 8. FUNCTION: UPDATE TOTAL SCORE
+-- =========================================
 CREATE OR REPLACE FUNCTION public.update_total_score()
-    RETURNS trigger
-    LANGUAGE 'plpgsql'
-    COST 100
-    VOLATILE NOT LEAKPROOF
+RETURNS trigger
+LANGUAGE 'plpgsql'
 AS $BODY$
 BEGIN
-    -- Check if a row for this user & quiz already exists in result
     IF EXISTS (
         SELECT 1 FROM result
         WHERE user_id = NEW.user_id AND quiz_id = NEW.quiz_id
     ) THEN
-        -- Update total_score by summing marks from user_answer
         UPDATE result
         SET total_score = (
             SELECT SUM(marks_obtained)
@@ -153,7 +131,6 @@ BEGIN
         submitted_at = NOW()
         WHERE user_id = NEW.user_id AND quiz_id = NEW.quiz_id;
     ELSE
-        -- Insert a new row in result
         INSERT INTO result (user_id, quiz_id, total_score, submitted_at)
         VALUES (
             NEW.user_id,
@@ -170,8 +147,10 @@ END;
 $BODY$;
 
 ALTER FUNCTION public.update_total_score()
-    OWNER TO postgres;
+OWNER TO quize_0zik_user;
 
-
-
-
+-- Trigger for update_total_score
+CREATE TRIGGER trg_update_total_score
+AFTER INSERT ON user_answer
+FOR EACH ROW
+EXECUTE FUNCTION public.update_total_score();
